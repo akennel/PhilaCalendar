@@ -15,8 +15,8 @@ class PhilaCalendar extends WP_Widget {
 
      /* Widget control settings. */
     $control_ops = array(
-       'width' => 250,
-       'height' => 250,
+       'width' => 150,
+       'height' => 150,
        'id_base' => 'PhilaCalendar');
 
     /* Create the widget. */
@@ -94,7 +94,13 @@ function philaCalendarWidget_handler($calendar, $itemLimit, $url){
 	$calID = str_ireplace("%40group.calendar.google.com/public/full", "", $calID);
 	
 	$url = $url . '?orderby=starttime&sortorder=ascending&max-results=' . $itemLimit . '&futureevents=true&alt=json';
-	$data = $calendar->PhilaCalendarGetFeedFromProxy($url);
+	$serverName = $_SERVER['HTTP_HOST'];
+	if ($serverName == "localhost"){
+		$data = $calendar->PhilaCalendarGetFeedFromProxy($url);
+	}
+	else{
+		$data = $calendar->PhilaCalendarGetFeed($url);
+	}
 	foreach ($data->feed->entry as $item)
 	{
 		$array_item = (array) $item;
