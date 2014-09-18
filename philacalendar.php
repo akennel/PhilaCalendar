@@ -1,65 +1,24 @@
 <?php
-/*
-Plugin Name: PhilaCalendar
-Description: Display Google Calendar entries.
+
+/* Plugin Name: Phila Calendar Widget
+Plugin URI: localhost/wordpress
+Description: Displays Google Calendar entries.
 Version: 1.0
+Author: Andrew Kennel
+Author URI: localhost/wordpress
 */
+add_shortcode( 'PhilaCalendar', 'PhilaCalendar' );
 
-class PhilaCalendar extends WP_Widget {
+function PhilaCalendar( $atts ) {
+    $a = shortcode_atts( array(
+    	'numberposts' => '',
+        'title' => '',
+        'url' => ''
+    ), $atts );
 
-  function PhilaCalendar() {
-     /* Widget settings. */
-    $widget_ops = array(
-      'classname' => 'PhilaCalendar',
-      'description' => 'Display Google Calendar entries.');
-
-     /* Widget control settings. */
-    $control_ops = array(
-       'width' => 150,
-       'height' => 150,
-       'id_base' => 'PhilaCalendar');
-
-    /* Create the widget. */
-   $this->WP_Widget('PhilaCalendar', 'Google Calendar entries.', $widget_ops, $control_ops );
-  }
-
-  function form ($instance) {
-    /* Set up some default widget settings. */
-    $defaults = array('numberposts' => '5','title'=>'','url'=>'');
-    $instance = wp_parse_args( (array) $instance, $defaults ); ?>
-
-  <p>
-    <label for="<?php echo $this->get_field_id('title'); ?>">Title:</label>
-    <input type="text" name="<?php echo $this->get_field_name('title') ?>" id="<?php echo $this->get_field_id('title') ?> " value="<?php echo $instance['title'] ?>" size="20">
-  </p>
- 
-  <p>
-   <label for="<?php echo $this->get_field_id('numberposts'); ?>">Number of posts:</label>
-   <select id="<?php echo $this->get_field_id('numberposts'); ?>" name="<?php echo $this->get_field_name('numberposts'); ?>">
-   <?php for ($i=1;$i<=20;$i++) {
-     echo '<option value="'.$i.'"';
-     if ($i==$instance['numberposts']) echo ' selected="selected"';
-       echo '>'.$i.'</option>';
-     } ?>
-   </select>
-  </p>
-
-  <p>
-    <label for="<?php echo $this->get_field_id('url'); ?>">Google Calendar Address:</label>
-    <input type="text" name="<?php echo $this->get_field_name('url') ?>" id="<?php echo $this->get_field_id('url') ?> " value="<?php echo $instance['url'] ?>" size="50">
-  </p>
-
-  <?php
-}
-
-function update ($new_instance, $old_instance) {
-  $instance = $old_instance;
-
-  $instance['numberposts'] = $new_instance['numberposts'];
-  $instance['title'] = $new_instance['title'];
-  $instance['url'] = $new_instance['url'];
-
-  return $instance;
+  echo $before_widget; // pre-widget code from theme
+  echo BuildPhilaCalendarString($a);	
+  echo $after_widget; // post-widget code from theme
 }
 
 function PhilaCalendarGetFeedFromProxy($url){
@@ -83,24 +42,38 @@ function PhilaCalendarGetFeed($url){
 	return $data;
 }
 
-function philaCalendarWidget_handler($calendar, $itemLimit, $url){
+function BuildPhilaCalendarString($a){
 
-
-	//Working locally we need to use a proxy server to return data. When deploying on server, change to direct read.
-	//$data = PhilaCalendarGetFeed($currentURL);
+	//Get parameters from short code. Supply default values if any are blank.
+	$widgetTitle = $a['title'];
+	$itemLimit = $a['numberposts'];
+	$url = $a['url'];
+	if ($widgetTitle == ""){
+		$widgetTitle = "Calendar Events";
+	}
+	if ($itemLimit == ""){
+		$itemLimit = 5;
+	}
+	if ($url == ""){
+		$url = "http://www.google.com/calendar/feeds/3efanutsrofqu273785lh789ko%40group.calendar.google.com/public/full";
+	}
 	
+	//Adjust URL to set item limit and force JSON connection	
 	$calID = $url;
 	$calID = str_ireplace("http://www.google.com/calendar/feeds/", "", $calID);
-	$calID = str_ireplace("%40group.calendar.google.com/public/full", "", $calID);
-	
+	$calID = str_ireplace("%40group.calendar.google.com/public/full", "", $calID);	
 	$url = $url . '?orderby=starttime&sortorder=ascending&max-results=' . $itemLimit . '&futureevents=true&alt=json';
+	
+	//If server is localhost, use proxy to get feed, otherwise use direct connection
 	$serverName = $_SERVER['HTTP_HOST'];
 	if ($serverName == "localhost"){
-		$data = $calendar->PhilaCalendarGetFeedFromProxy($url);
+		$data = PhilaCalendarGetFeedFromProxy($url);
 	}
 	else{
-		$data = $calendar->PhilaCalendarGetFeed($url);
+		$data = PhilaCalendarGetFeed($url);
 	}
+	
+	//build array of events pulling title and start date
 	foreach ($data->feed->entry as $item)
 	{
 		$array_item = (array) $item;
@@ -109,8 +82,7 @@ function philaCalendarWidget_handler($calendar, $itemLimit, $url){
 		$start = $array_item['gd$when'][0]->startTime;			
 		
 		$eventArray[] = array('title' => $title['$t'], 'startDate' => $start);
-	}
-	
+	}	
 	
 	//Sort our array of events by date
 	function date_compare($a, $b)
@@ -127,11 +99,9 @@ function philaCalendarWidget_handler($calendar, $itemLimit, $url){
 		$itemLimit = sizeof($eventArray);
 	}
 	
+	//Loop through the events until we hit the item limit
 	$eventCount = (int)0;
 	$eventString = "<div id=\"PhilaGoogleCalendarEventSection\">";
-	
-	
-	//Loop through the events until we hit the item limit
 	while($eventCount < $itemLimit){
 		$currentEvent = (array)$eventArray[$eventCount];
 		$startDate = new DateTime($currentEvent['startDate']);//convert startdate string to DateTime object
@@ -139,13 +109,13 @@ function philaCalendarWidget_handler($calendar, $itemLimit, $url){
 		$eventString .= "<div class=\"PhilaGoogleCalendarDateRow\">".date_format($startDate, 'l').", ".date_format($startDate, 'm/d/Y')."</div>"; 
 		$eventString .= "<div class=\"PhilaGoogleCalendarTitleRow\">".date_format($startDate, 'g:i A')." - ".$currentEvent['title']."<A href=\"./CalendarDetails?calendar=$calID&limit=$itemLimit#Event$eventCount\">View Details >></A>"."</div>";
 		$eventCount++;
-	}
-	
+	}	
 	$eventString .= "</div>";
 	
+	//build outputHTML with event items and title embedded
 	$output = "<div id=\"PhilaGoogleCalendarWidget\" class=\"PhilaWidget\">";
 	$output .= "	<span id=\"PhilaGoogleCalendarMainWindow\">";
-	$output .= "		<h1 class=\"PhilaWidgetTitle\">Events</h1>";
+	$output .= "		<h1 class=\"PhilaWidgetTitle\">".$widgetTitle."</h1>";
 	$output .= $eventString;
 	$output .= "	</span>";
 	$output .= "</div>";
@@ -153,28 +123,6 @@ function philaCalendarWidget_handler($calendar, $itemLimit, $url){
 	return $output;
 }
 
-function widget ($args,$instance) {
-    extract($args);
-    
-    $calendar = new PhilaCalendar();
 
-    $title = $instance['title'];
-    $numberposts = $instance['numberposts'];
-    $url = $instance['url'];
-    
-    //Add the widget to the page
-    echo $before_widget;
-    echo $before_title.$title.$after_title;    
-  	echo $calendar->philaCalendarWidget_handler($calendar, $numberposts, $url);
-    echo $after_widget;
- }
-}
-
-
-//add_action('widgets_init', 'ahspfc_load_widgets');
-add_action(
-'widgets_init',
-create_function('','return register_widget("PhilaCalendar");')
-);
 
 ?>
